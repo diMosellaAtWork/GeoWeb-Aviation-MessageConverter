@@ -33,6 +33,8 @@
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+		<checkstyle.version>3.0.0</checkstyle.version>
+		<jxr.version>3.0.0</jxr.version>
 		<java.version>1.8</java.version>
 		<!-- Github site plugin for Github mvn repo deployment -->
 		<site-maven-plugin.version>0.12</site-maven-plugin.version>
@@ -64,6 +66,21 @@
 			</plugin>
 		</plugins>
 	</build>
+
+	<reporting>
+		<plugins>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-jxr-plugin</artifactId>
+				<version>${jxr.version}</version>
+			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-checkstyle-plugin</artifactId>
+				<version>${checkstyle.version}</version>
+			</plugin>
+		</plugins>
+	</reporting>
 
 	<dependencies>
 		<dependency>
