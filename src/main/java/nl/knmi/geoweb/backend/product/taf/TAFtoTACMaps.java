@@ -4,8 +4,9 @@ import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
+
+import nl.knmi.adaguc.tools.Debug;
 
 public class TAFtoTACMaps {
 	private static final Map<String, String> qualifierMap;
@@ -63,9 +64,15 @@ public class TAFtoTACMaps {
 		return phenomenaMap.get(phenomenon.trim());
 	}
 
-	public static String toDDHHMM(OffsetDateTime t) {
+	public static String toDDHHMM_Z(OffsetDateTime t) {
 		if(t==null)return null;
 		DateTimeFormatter fmt= DateTimeFormatter.ofPattern("ddHHmm'Z'");
+		return t.format(fmt);
+	}
+
+	public static String toDDHHMM(OffsetDateTime t) {
+		if(t==null)return null;
+		DateTimeFormatter fmt= DateTimeFormatter.ofPattern("ddHHmm");
 		return t.format(fmt);
 	}
 
@@ -113,8 +120,6 @@ public class TAFtoTACMaps {
 	public static Taf.Forecast.TAFWeather fromTacString(String tac) {
 
 	    Taf.Forecast.TAFWeather w=new Taf.Forecast.TAFWeather();
-	    List<String>phen=new ArrayList<>();
-
 		String localTac=tac;
 		if (tac.startsWith("-")) {
 		    w.setQualifier(findQualifier("-"));
@@ -143,7 +148,7 @@ public class TAFtoTACMaps {
             if (phenomenon!=null){
                 w.getPhenomena().add(phenomenon);
             } else {
-                System.err.println("Unknown phenomenon "+ph);
+                Debug.errprintln("Unknown phenomenon "+ph);
             }
         }
         return w;

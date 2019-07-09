@@ -37,7 +37,7 @@ public class SigmetToTACTest {
 	@Qualifier("sigmetObjectMapper")
 	private ObjectMapper sigmetObjectMapper;
 	
-	@Value("${productstorelocation}")
+	@Value("${geoweb.products.storeLocation}")
 	private String sigmetStoreLocation;
 
 	@Autowired
@@ -118,7 +118,7 @@ public class SigmetToTACTest {
 	}
 	
 	public SigmetStore createNewStore() throws IOException {
-		Tools.rmdir(sigmetStoreLocation);
+		Tools.rmdir(sigmetStoreLocation+"/sigmets");
 		Tools.mksubdirs(sigmetStoreLocation);
 		testSigmetStore.setLocation(sigmetStoreLocation);
 		Sigmet[] sigmets=testSigmetStore.getSigmets(false, SigmetAirmetStatus.concept);

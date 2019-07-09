@@ -8,7 +8,6 @@ import java.util.List;
 import java.util.Optional;
 
 import org.geojson.Feature;
-import org.locationtech.jts.util.Debug;
 
 import fi.fmi.avi.converter.ConversionHints;
 import fi.fmi.avi.converter.ConversionResult;
@@ -30,6 +29,7 @@ import fi.fmi.avi.model.sigmet.immutable.AirmetCloudLevelsImpl;
 import fi.fmi.avi.model.sigmet.immutable.AirmetReferenceImpl;
 import fi.fmi.avi.model.sigmet.immutable.AirmetWindImpl;
 import fi.fmi.avi.model.sigmet.immutable.PhenomenonGeometryWithHeightImpl;
+import nl.knmi.adaguc.tools.Debug;
 import nl.knmi.geoweb.backend.product.airmet.Airmet;
 import nl.knmi.geoweb.backend.product.airmet.ObscuringPhenomenonList;
 import nl.knmi.geoweb.backend.product.sigmet.geo.GeoUtils;
@@ -46,7 +46,6 @@ public class GeoWebAIRMETConverter extends AbstractGeoWebAirmetConverter<AIRMET>
         AIRMETImpl.Builder airmet = new AIRMETImpl.Builder();
 
         airmet.setIssuingAirTrafficServicesUnit(getFicInfo(input.getFirname(), input.getLocation_indicator_icao()));
-        UnitPropertyGroupImpl.Builder mwo = new UnitPropertyGroupImpl.Builder();
         airmet.setMeteorologicalWatchOffice(getMWOInfo(input.getLocation_indicator_mwo(), input.getLocation_indicator_mwo()));
 
         AirspaceImpl.Builder airspaceBuilder=new AirspaceImpl.Builder()
@@ -75,7 +74,7 @@ public class GeoWebAIRMETConverter extends AbstractGeoWebAirmetConverter<AIRMET>
                 airmet.setAnalysisType(SigmetAnalysisType.FORECAST);
             }
         } else {
-            System.err.println("obs_or_fcst NOT found");
+            Debug.errprintln("obs_or_fcst NOT found");
         }
 
         switch (input.getChange()) {
@@ -130,21 +129,28 @@ public class GeoWebAIRMETConverter extends AbstractGeoWebAirmetConverter<AIRMET>
                 if (cloudLevels != null) {
                     Airmet.LowerCloudLevel lowerCloudLevel = cloudLevels.getLower();
                     if (lowerCloudLevel == null) {
-                    } //Error
-                    if (lowerCloudLevel.getSurface()) {
-                        System.err.println("cloudBottom isSurface = true");
-                        phenBuilder.setLowerLimit(NumericMeasureImpl.of(0.0, "FT")); //Special case for SFC: 0FT)
-                        cloudLevelsBuilder.setCloudBottom(NumericMeasureImpl.of(0, "FT"));
+                        Debug.errprintln("lowerCloudLevel is null");
                     } else {
-                        System.err.println("cloudBottom isSurface = false");
-                        phenBuilder.setLowerLimit(NumericMeasureImpl.of(lowerCloudLevel.getVal(), lowerCloudLevel.getUnit()));
-                        cloudLevelsBuilder.setCloudBottom(NumericMeasureImpl.of(lowerCloudLevel.getVal(), lowerCloudLevel.getUnit()));
+                        if (lowerCloudLevel.getSurface()) {
+                            Debug.errprintln("cloudBottom isSurface = true");
+                            phenBuilder.setLowerLimit(NumericMeasureImpl.of(0.0, "FT")); //Special case for SFC: 0FT)
+                            cloudLevelsBuilder.setCloudBase(NumericMeasureImpl.of(0, "FT"));
+                        } else {
+                            Debug.errprintln("cloudBottom isSurface = false");
+                            phenBuilder.setLowerLimit(NumericMeasureImpl.of(lowerCloudLevel.getVal(), lowerCloudLevel.getUnit()));
+                            cloudLevelsBuilder.setCloudBase(NumericMeasureImpl.of(lowerCloudLevel.getVal(), lowerCloudLevel.getUnit()));
+                        }
                     }
                     Airmet.UpperCloudLevel upperCloudLevel = cloudLevels.getUpper();
                     if (upperCloudLevel == null) {
-                    } //Error
-                    phenBuilder.setUpperLimit(NumericMeasureImpl.of(upperCloudLevel.getVal(), upperCloudLevel.getUnit()));
-                    cloudLevelsBuilder.setCloudTop(NumericMeasureImpl.of(upperCloudLevel.getVal(), upperCloudLevel.getUnit()));
+                        Debug.errprintln("upperCloudLevel is null");
+                    } else {
+                        phenBuilder.setUpperLimit(NumericMeasureImpl.of(upperCloudLevel.getVal(), upperCloudLevel.getUnit()));
+                        cloudLevelsBuilder.setCloudTop(NumericMeasureImpl.of(upperCloudLevel.getVal(), upperCloudLevel.getUnit()));
+                        if ((upperCloudLevel.getAbove() != null) && (upperCloudLevel.getAbove())) {
+                            cloudLevelsBuilder.setTopAbove(true);
+                        }
+                    }
                     airmet.setCloudLevels(cloudLevelsBuilder.build());
                 }
                 break;
@@ -283,22 +289,6 @@ public class GeoWebAIRMETConverter extends AbstractGeoWebAirmetConverter<AIRMET>
         return retval;
     }
 
-    private String getFirType(String firName) {
-        String firType=null;
-        if (firName.endsWith("FIR")) {
-            firType = "FIR";
-        } else if (firName.endsWith("UIR")) {
-            firType = "UIR";
-        } else if (firName.endsWith("CTA")) {
-            firType = "CTA";
-        } else if (firName.endsWith("FIR/UIR")) {
-            firType = "OTHER:FIR_UIR";
-        } else {
-            return "OTHER:UNKNOWN";
-        }
-        return firType;
-    }
-
     String getFirName(String firFullName){
         return firFullName.trim().replaceFirst("(\\w+)\\s((FIR|UIR|CTA|UIR/FIR)$)", "$1");
     }
@@ -307,13 +297,6 @@ public class GeoWebAIRMETConverter extends AbstractGeoWebAirmetConverter<AIRMET>
         String firName=firFullName.trim().replaceFirst("(\\w+)\\s((FIR|UIR|CTA|UIR/FIR)$)", "$1");
         UnitPropertyGroupImpl.Builder unit = new UnitPropertyGroupImpl.Builder();
         unit.setPropertyGroup(firName, icao, "FIC");
-        return unit.build();
-    }
-
-    private UnitPropertyGroup getFirInfo(String firFullName, String icao) {
-        String firName=getFirName(firFullName);
-        UnitPropertyGroupImpl.Builder unit = new UnitPropertyGroupImpl.Builder();
-        unit.setPropertyGroup(firName, icao, getFirType(firFullName));
         return unit.build();
     }
 

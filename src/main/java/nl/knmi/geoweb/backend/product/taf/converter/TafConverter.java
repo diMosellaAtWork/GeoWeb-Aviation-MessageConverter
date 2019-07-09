@@ -1,10 +1,14 @@
 package nl.knmi.geoweb.backend.product.taf.converter;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
+import org.springframework.stereotype.Component;
 import org.w3c.dom.Document;
 
 import fi.fmi.avi.converter.AviMessageConverter;
@@ -18,6 +22,7 @@ import fi.fmi.avi.model.immutable.GeoPositionImpl;
 import fi.fmi.avi.model.taf.TAF;
 import fi.fmi.avi.model.taf.immutable.TAFImpl;
 import fi.fmi.avi.model.taf.immutable.TAFReferenceImpl;
+import nl.knmi.adaguc.tools.Debug;
 import nl.knmi.geoweb.backend.aviation.AirportInfo;
 import nl.knmi.geoweb.backend.aviation.AirportStore;
 import nl.knmi.geoweb.backend.product.ProductConverter;
@@ -27,15 +32,14 @@ import nl.knmi.geoweb.iwxxm_2_1.converter.GeoWebTafInConverter;
 import nl.knmi.geoweb.iwxxm_2_1.converter.conf.GeoWebConverterConfig;
 
 @Configuration
-@Import({IWXXMConverter.class, GeoWebTAFConverter.class, GeoWebTafInConverter.class})
+@Import({ IWXXMConverter.class, GeoWebTAFConverter.class, GeoWebTafInConverter.class })
 public class TafConverter implements ProductConverter<Taf> {
 
-	@Autowired
-	private AviMessageSpecificConverter<TAF, Document> tafIWXXMDOMSerializer;
+    @Autowired
+    private AviMessageSpecificConverter<TAF, Document> tafIWXXMDOMSerializer;
 
-	@Autowired
-	private AviMessageSpecificConverter<TAF, String> tafIWXXMStringSerializer;
-
+    @Autowired
+    private AviMessageSpecificConverter<TAF, String> tafIWXXMStringSerializer;
 
     @Autowired
     @Qualifier("aviTafSpecificMessageConverter")
@@ -45,11 +49,15 @@ public class TafConverter implements ProductConverter<Taf> {
     @Qualifier("aviTafInSpecificMessageConverter")
     private AviMessageSpecificConverter<TAF, Taf> geoWebTafInImporter;
 
+    @Autowired
+    @Qualifier("tafObjectMapper")
+    private ObjectMapper tafObjectMapper;
+
     @Bean
     public AviMessageConverter aviMessageConverter() {
         AviMessageConverter p = new AviMessageConverter();
-		p.setMessageSpecificConverter(IWXXMConverter.TAF_POJO_TO_IWXXM21_DOM, tafIWXXMDOMSerializer);
-		p.setMessageSpecificConverter(IWXXMConverter.TAF_POJO_TO_IWXXM21_STRING, tafIWXXMStringSerializer);
+        p.setMessageSpecificConverter(IWXXMConverter.TAF_POJO_TO_IWXXM21_DOM, tafIWXXMDOMSerializer);
+        p.setMessageSpecificConverter(IWXXMConverter.TAF_POJO_TO_IWXXM21_STRING, tafIWXXMStringSerializer);
         p.setMessageSpecificConverter(GeoWebConverterConfig.GEOWEBTAF_TO_TAF_POJO, geoWebTafImporter);
         p.setMessageSpecificConverter(GeoWebConverterConfig.TAF_TO_GEOWEBTAF_POJO, geoWebTafInImporter);
         return p;
@@ -59,7 +67,6 @@ public class TafConverter implements ProductConverter<Taf> {
     AirportStore airportStore;
 
     public String ToIWXXM_2_1(Taf geoWebTaf) {
-
         ConversionResult<TAF> result = geoWebTafImporter.convertMessage(geoWebTaf, ConversionHints.TAF);
         if (ConversionResult.Status.SUCCESS == result.getStatus()) {
             TAFImpl.Builder convertedTAF = TAFImpl.Builder.from(result.getConvertedMessage().get());
@@ -68,11 +75,11 @@ public class TafConverter implements ProductConverter<Taf> {
             if (airportInfo != null) {
                 AerodromeImpl.Builder ad = AerodromeImpl.Builder.from(convertedTAF.getAerodrome());
 
-                GeoPositionImpl.Builder refPoint = new GeoPositionImpl.Builder()
+                GeoPositionImpl.Builder refPoint = GeoPositionImpl.builder()
                         .setCoordinateReferenceSystemId(airportInfo.getGeoLocation().getEPSG())
-                        .setCoordinates(new Double[]{airportInfo.getGeoLocation().getLon(), airportInfo.getGeoLocation().getLat()})
-                        .setElevationValue(airportInfo.getFieldElevation())
-                        .setElevationUom("m");
+                        .addCoordinates(new double[] { airportInfo.getGeoLocation().getLon(),
+                                airportInfo.getGeoLocation().getLat() })
+                        .setElevationValue(airportInfo.getFieldElevation()).setElevationUom("m");
                 ad.setReferencePoint(refPoint.build());
 
                 ad.setFieldElevationValue(airportInfo.getFieldElevation());
@@ -80,40 +87,41 @@ public class TafConverter implements ProductConverter<Taf> {
                 ad.setName(airportInfo.getName());
                 ad.setDesignator(airportName);
 
-
                 convertedTAF.setAerodrome(ad.build());
 
                 if (convertedTAF.getReferredReport().isPresent()) {
-                    AerodromeImpl.Builder referredAd = AerodromeImpl.Builder.from(convertedTAF.getReferredReport().get().getAerodrome());
+                    AerodromeImpl.Builder referredAd = AerodromeImpl.Builder
+                            .from(convertedTAF.getReferredReport().get().getAerodrome());
                     referredAd.setLocationIndicatorICAO(airportInfo.getICAOName());
                     referredAd.setReferencePoint(refPoint.build());
                     referredAd.setDesignator(airportName);
                     referredAd.setName(airportInfo.getName());
                     referredAd.setFieldElevationValue(airportInfo.getFieldElevation());
-                    TAFReferenceImpl.Builder tafReference=TAFReferenceImpl.Builder.from(convertedTAF.getReferredReport().get());
+                    TAFReferenceImpl.Builder tafReference = TAFReferenceImpl.Builder
+                            .from(convertedTAF.getReferredReport().get());
                     tafReference.setAerodrome(referredAd.build());
                     convertedTAF.setReferredReport(tafReference.build());
                 }
             } else {
-                System.err.println("airportinfo for " + airportName + " not found");
+                Debug.errprintln("airportinfo for " + airportName + " not found");
             }
             ConversionResult<String> iwxxmResult = tafIWXXMStringSerializer.convertMessage(convertedTAF.build(), ConversionHints.TAF);
             if ((ConversionResult.Status.SUCCESS == iwxxmResult.getStatus())||(ConversionResult.Status.WITH_WARNINGS == iwxxmResult.getStatus())) {
                 for (ConversionIssue iss : iwxxmResult.getConversionIssues()) {
-                    System.err.println("iss: " + iss.getMessage());
+                    Debug.errprintln("iss: " + iss.getMessage());
                 }
                 return iwxxmResult.getConvertedMessage().get();
             } else {
-                System.err.println("ERR: " + iwxxmResult.getStatus());
+                Debug.errprintln("ERR: " + iwxxmResult.getStatus());
                 for (ConversionIssue iss : iwxxmResult.getConversionIssues()) {
-                    System.err.println("iss: " + iss.getMessage());
+                    Debug.errprintln("iss: " + iss.getMessage());
                 }
             } //TODO
         } else {
-            System.err.println("Taf2IWXXM failed");
-            System.err.println("ERR: " + result.getStatus());
+            Debug.errprintln("Taf2IWXXM failed");
+            Debug.errprintln("ERR: " + result.getStatus());
             for (ConversionIssue iss : result.getConversionIssues()) {
-                System.err.println("iss: " + iss.getMessage());
+                Debug.errprintln("iss: " + iss.getMessage());
             }
         }
         return "FAIL";
